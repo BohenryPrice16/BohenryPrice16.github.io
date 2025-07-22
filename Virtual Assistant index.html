@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interi Patient App</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background-color: #f4f4f4; }
+#registration { display: none; padding: 20px; background-image: url('https://placehold.co/600x400/png?text=Interi+Booth+Photo'); /* Replace with actual uploaded photo URL or base64 */ background-size: cover; background-position: center; height: 100vh; }
+#registration form { background: rgba(255,255,255,0.8); padding: 20px; border-radius: 10px; }
+input, select { width: 100%; margin: 10px 0; padding: 10px; font-size: 16px; }
+button { padding: 10px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+#main { display: none; }
+#chat { height: 300px; overflow-y: scroll; background: white; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+#chat p { margin: 5px 0; padding: 10px; border-radius: 5px; }
+#chat p.app { background: #e0f7fa; }
+#chat p.user { background: #c8e6c9; text-align: right; }
+#inputArea { margin-top: 10px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+th { background: #f2f2f2; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+<div id="registration">
+<form>
+<input id="firstName" placeholder="First Name" required>
+<input id="lastName" placeholder="Last Name" required>
+<select id="state" required>
+<option value="">Select State</option>
+<!-- All states options as before -->
+<option value="AL">AL</option><option value="AK">AK</option><option value="AZ">AZ</option><option value="AR">AR</option><option value="CA">CA</option><option value="CO">CO</option><option value="CT">CT</option><option value="DE">DE</option><option value="FL">FL</option><option value="GA">GA</option><option value="HI">HI</option><option value="ID">ID</option><option value="IL">IL</option><option value="IN">IN</option><option value="IA">IA</option><option value="KS">KS</option><option value="KY">KY</option><option value="LA">LA</option><option value="ME">ME</option><option value="MD">MD</option><option value="MA">MA</option><option value="MI">MI</option><option value="MN">MN</option><option value="MS">MS</option><option value="MO">MO</option><option value="MT">MT</option><option value="NE">NE</option><option value="NV">NV</option><option value="NH">NH</option><option value="NJ">NJ</option><option value="NM">NM</option><option value="NY">NY</option><option value="NC">NC</option><option value="ND">ND</option><option value="OH">OH</option><option value="OK">OK</option><option value="OR">OR</option><option value="PA">PA</option><option value="RI">RI</option><option value="SC">SC</option><option value="SD">SD</option><option value="TN">TN</option><option value="TX">TX</option><option value="UT">UT</option><option value="VT">VT</option><option value="VA">VA</option><option value="WA">WA</option><option value="WV">WV</option><option value="WI">WI</option><option value="WY">WY</option>
+</select>
+<input id="physician" placeholder="Physician Name" required>
+<select id="language" required>
+<option value="en">English</option>
+<option value="es">Spanish</option>
+</select>
+<button type="button" onclick="register()">Register</button>
+</form>
+</div>
+<div id="main">
+<div id="chat"></div>
+<div id="inputArea"></div>
+<button onclick="viewLogs()">View Logs</button>
+<button onclick="generatePDF()">Generate PDF Report</button>
+<button onclick="viewAnalytics()">View Analytics</button>
+</div>
+<script>
+const stateTimezones = { /* same as before */ };
+
+const texts = {
+en: {
+firstNamePlaceholder: 'First Name',
+lastNamePlaceholder: 'Last Name',
+selectState: 'Select State',
+physicianPlaceholder: 'Physician Name',
+registerButton: 'Register',
+welcome: 'Hi {name}! Welcome to the Interi Patient App. Please watch the User Video <a href="https://www.youtube.com/watch?v=RDwd2ENPB-w" target="_blank">here</a> and tell me your initial fluid volume (mL).',
+initialNotification: 'Welcome {name}! Please watch the Interi System User Video and record your initial fluid volume (mL).',
+prompt: 'Hi {name}! It’s {hour}:00 and it’s time to check your fluid volume (mL) on your Interi device. Please tell me the current volume reading of your current canister (mL).',
+promptNotification: 'Hi {name}! It\'s time to check your fluid volume (mL).',
+currentVolumeLabel: 'Current Fluid Volume (mL):',
+yourCurrentVolume: 'Your current volume: {volume} mL',
+canisterQuestion: 'Did you change canisters since the last recording?',
+finalPrevLabel: 'Final Previous Volume (mL):',
+finalPrevVolume: 'Final previous volume: {volume} mL',
+flowing: 'Great! Looks like the fluid is flowing. Keep up the good work!',
+notFlowing: 'It looks like the fluid is NOT flowing. Please check the troubleshooting steps on pages 4-5 of the Patient Guide <a href="https://icsurgical.com/site/assets/files/1303/interi-system-patient-guide.pdf" target="_blank">here</a> or watch a demonstration on our User Video <a href="https://www.youtube.com/watch?v=RDwd2ENPB-w" target="_blank">here</a>.',
+helpQuestion: 'Is there anything else I can help with?',
+okay: 'Okay, have a good day!',
+helpResponse: 'What can I help with? (For MVP, note your question and contact your physician.)',
+yes: 'YES',
+no: 'NO',
+viewLogsButton: 'View Logs',
+generatePDFButton: 'Generate PDF Report',
+viewAnalyticsButton: 'View Analytics',
+logHeaders: ['Date', 'Time', 'Current Volume (mL)', 'Canister Changed', 'Final Prev Volume (mL)', 'Volume Delta (mL)'],
+dailyTotalsHeader: 'Daily Fluid Volume Totals (mL)',
+dailyTableHeaders: ['Date', 'Total Volume (mL)']
+},
+es: {
+firstNamePlaceholder: 'Nombre',
+lastNamePlaceholder: 'Apellido',
+selectState: 'Seleccionar Estado',
+physicianPlaceholder: 'Nombre del Médico',
+registerButton: 'Registrarse',
+welcome: '¡Hola {name}! Bienvenido a la App para Pacientes Interi. Por favor vea el Video de Usuario <a href="https://www.youtube.com/watch?v=RDwd2ENPB-w" target="_blank">aquí</a> y dígame su volumen inicial de fluido (mL).',
+initialNotification: '¡Bienvenido {name}! Por favor vea el Video de Usuario del Sistema Interi y registre su volumen inicial de fluido (mL).',
+prompt: '¡Hola {name}! Son las {hour}:00 y es hora de verificar su volumen de fluido (mL) en su dispositivo Interi. Por favor dígame la lectura actual de volumen de su canister actual (mL).',
+promptNotification: '¡Hola {name}! Es hora de verificar su volumen de fluido (mL).',
+currentVolumeLabel: 'Volumen Actual de Fluido (mL):',
+yourCurrentVolume: 'Su volumen actual: {volume} mL',
+canisterQuestion: '¿Cambió canisters desde la última grabación?',
+finalPrevLabel: 'Volumen Final Anterior (mL):',
+finalPrevVolume: 'Volumen final anterior: {volume} mL',
+flowing: '¡Excelente! Parece que el fluido está fluyendo. ¡Siga así!',
+notFlowing: 'Parece que el fluido NO está fluyendo. Por favor revise los pasos de resolución de problemas en las páginas 4-5 de la Guía del Paciente <a href="https://icsurgical.com/site/assets/files/1303/interi-system-patient-guide.pdf" target="_blank">aquí</a> o vea una demostración en nuestro Video de Usuario <a href="https://www.youtube.com/watch?v=RDwd2ENPB-w" target="_blank">aquí</a>.',
+helpQuestion: '¿Hay algo más en lo que pueda ayudar?',
+okay: 'Bien, ¡que tenga un buen día!',
+helpResponse: '¿En qué puedo ayudar? (Para MVP, anote su pregunta y contacte a su médico.)',
+yes: 'SÍ',
+no: 'NO',
+viewLogsButton: 'Ver Registros',
+generatePDFButton: 'Generar Reporte PDF',
+viewAnalyticsButton: 'Ver Análisis',
+logHeaders: ['Fecha', 'Hora', 'Volumen Actual (mL)', 'Canister Cambiado', 'Volumen Final Anterior (mL)', 'Delta de Volumen (mL)'],
+dailyTotalsHeader: 'Totales Diarios de Volumen de Fluido (mL)',
+dailyTableHeaders: ['Fecha', 'Volumen Total (mL)']
+}
+};
+
+let user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null;
+if (!user) {
+document.getElementById('registration').style.display = 'block';
+updateRegistrationUI('en'); // Default for registration
+} else {
+document.getElementById('main').style.display = 'block';
+updateMainUI();
+initApp();
+}
+
+function updateRegistrationUI(lang) {
+document.getElementById('firstName').placeholder = texts[lang].firstNamePlaceholder;
+document.getElementById('lastName').placeholder = texts[lang].lastNamePlaceholder;
+document.getElementById('state').options[0].text = texts[lang].selectState;
+document.getElementById('physician').placeholder = texts[lang].physicianPlaceholder;
+document.querySelector('#registration button').textContent = texts[lang].registerButton;
+}
+
+// Listen for language change in registration to update placeholders live
+document.getElementById('language').addEventListener('change', (e) => updateRegistrationUI(e.target.value));
+
+function updateMainUI() {
+const lang = user.lang || 'en';
+document.querySelector('#main button:nth-child(1)').textContent = texts[lang].viewLogsButton;
+document.querySelector('#main button:nth-child(2)').textContent = texts[lang].generatePDFButton;
+document.querySelector('#main button:nth-child(3)').textContent = texts[lang].viewAnalyticsButton;
+}
+
+function getText(key, params = {}) {
+const lang = user ? (user.lang || 'en') : 'en';
+let str = texts[lang][key] || texts.en[key]; // Fallback to en
+for (const p in params) {
+str = str.replace(`{${p}}`, params[p]);
+}
+return str;
+}
+
+function register() {
+const firstName = document.getElementById('firstName').value;
+const lastName = document.getElementById('lastName').value;
+const state = document.getElementById('state').value;
+const physician = document.getElementById('physician').value;
+const lang = document.getElementById('language').value;
+if (firstName && lastName && state && physician && lang) {
+user = { firstName, lastName, state, physician, lang };
+localStorage.setItem('user', JSON.stringify(user));
+document.getElementById('registration').style.display = 'none';
+document.getElementById('main').style.display = 'block';
+updateMainUI();
+initApp();
+sendInitialWelcome();
+} else {
+alert('Please fill all fields.');
+}
+}
+
+function sendInitialWelcome() {
+if (Notification.permission === 'granted') {
+new Notification(getText('initialNotification', {name: user.firstName}));
+}
+initialPrompt();
+}
+
+function initialPrompt() {
+addMessage(getText('welcome', {name: user.firstName}), 'app');
+showFluidInput(true);
+}
+
+function initApp() {
+if ('Notification' in window) {
+Notification.requestPermission();
+}
+setInterval(checkTime, 60000);
+checkTime();
+}
+
+let lastPromptTime = 0;
+function checkTime() {
+const tz = stateTimezones[user.state];
+const options = { timeZone: tz, hour: 'numeric', minute: 'numeric', hour12: false };
+const formatter = new Intl.DateTimeFormat('en-US', options);
+const parts = formatter.formatToParts(new Date());
+const hour = parseInt(parts.find(p => p.type === 'hour').value);
+const minute = parseInt(parts.find(p => p.type === 'minute').value);
+const now = Date.now();
+if ([8, 14, 20].includes(hour) && minute === 0 && now - lastPromptTime > 3600000) {
+lastPromptTime = now;
+if (Notification.permission === 'granted') {
+new Notification(getText('promptNotification', {name: user.firstName}));
+}
+startPrompt(hour);
+}
+}
+
+function startPrompt(hour) {
+addMessage(getText('prompt', {name: user.firstName, hour}), 'app');
+showFluidInput(false);
+}
+
+function showFluidInput(isInitial = false) {
+const inputArea = document.getElementById('inputArea');
+inputArea.innerHTML = `
+<label>${getText('currentVolumeLabel')}</label>
+<select id="hundreds"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select>
+<select id="tens"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select>
+<select id="units"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select>
+<button onclick="submitCurrentVolume(${isInitial})">Done</button>
+`;
+}
+
+let currentVolume = 0;
+function submitCurrentVolume(isInitial = false) {
+const hundreds = parseInt(document.getElementById('hundreds').value);
+const tens = parseInt(document.getElementById('tens').value);
+const units = parseInt(document.getElementById('units').value);
+currentVolume = hundreds * 100 + tens * 10 + units;
+addMessage(getText('yourCurrentVolume', {volume: currentVolume}), 'user');
+showCanisterChangeConfirm(isInitial);
+}
+
+function showCanisterChangeConfirm(isInitial) {
+const logs = JSON.parse(localStorage.getItem('logs') || '[]');
+if (logs.length === 0 && isInitial) {
+handleCanisterChange('NO', isInitial);
+return;
+}
+addMessage(getText('canisterQuestion'), 'app');
+const inputArea = document.getElementById('inputArea');
+inputArea.innerHTML = `
+<select id="changed"><option>${getText('no')}</option><option>${getText('yes')}</option></select>
+<button onclick="handleCanisterChange(document.getElementById('changed').value, ${isInitial})">Submit</button>
+`;
+}
+
+function handleCanisterChange(changed, isInitial) {
+addMessage(changed, 'user');
+if (changed === getText('no')) {
+processLogAndRespond(0, getText('no'), isInitial);
+} else {
+addMessage(getText('finalPrevLabel'), 'app');
+showFinalPrevInput(isInitial);
+}
+}
+
+function showFinalPrevInput(isInitial) {
+const inputArea = document.getElementById('inputArea');
+inputArea.innerHTML = `
+<label>${getText('finalPrevLabel')}</label>
+<select id="hundreds"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select>
+<select id="tens"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select>
+<select id="units"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select>
+<button onclick="submitFinalPrev(${isInitial})">Done</button>
+`;
+}
+
+function submitFinalPrev(isInitial) {
+const hundreds = parseInt(document.getElementById('hundreds').value);
+const tens = parseInt(document.getElementById('tens').value);
+const units = parseInt(document.getElementById('units').value);
+const finalPrev = hundreds * 100 + tens * 10 + units;
+addMessage(getText('finalPrevVolume', {volume: finalPrev}), 'user');
+processLogAndRespond(finalPrev, getText('yes'), isInitial);
+}
+
+function processLogAndRespond(finalPrev, changed, isInitial) {
+const now = new Date();
+let logs = JSON.parse(localStorage.getItem('logs') || '[]');
+const prevVolume = logs.length > 0 ? logs[logs.length - 1].current_volume : 0;
+let volumeDelta;
+if (changed === getText('no')) {
+volumeDelta = Math.max(0, currentVolume - prevVolume);
+} else {
+volumeDelta = Math.max(0, (finalPrev - prevVolume) + currentVolume);
+}
+const logEntry = {
+time: now.toISOString(),
+date: now.toLocaleDateString('en-US'),
+current_volume: currentVolume,
+canister_changed: changed,
+final_prev_volume: changed === getText('yes') ? finalPrev : null,
+volume_delta: volumeDelta
+};
+logs.push(logEntry);
+localStorage.setItem('logs', JSON.stringify(logs));
+
+let response = volumeDelta > 0 ? getText('flowing') : getText('notFlowing');
+addMessage(response, 'app');
+addMessage(getText('helpQuestion'), 'app');
+showYesNo();
+}
+
+function showYesNo() {
+const inputArea = document.getElementById('inputArea');
+inputArea.innerHTML = `
+<select id="help"><option>${getText('no')}</option><option>${getText('yes')}</option></select>
+<button onclick="submitHelp()">Submit</button>
+`;
+}
+
+function submitHelp() {
+const help = document.getElementById('help').value;
+if (help === getText('no')) {
+addMessage(getText('no'), 'user');
+addMessage(getText('okay'), 'app');
+} else {
+addMessage(getText('yes'), 'user');
+addMessage(getText('helpResponse'), 'app');
+logAnalytics('help_requested');
+}
+document.getElementById('inputArea').innerHTML = '';
+}
+
+function addMessage(msg, type = 'app') {
+const chat = document.getElementById('chat');
+const p = document.createElement('p');
+p.innerHTML = msg;
+p.classList.add(type);
+chat.appendChild(p);
+chat.scrollTop = chat.scrollHeight;
+}
+
+function logAnalytics(event) {
+let analytics = JSON.parse(localStorage.getItem('analytics') || '[]');
+analytics.push({ time: new Date().toISOString(), event });
+localStorage.setItem('analytics', JSON.stringify(analytics));
+}
+
+function viewLogs() {
+const logs = JSON.parse(localStorage.getItem('logs') || '[]');
+const headers = getText('logHeaders');
+let table = '<table><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
+logs.forEach(log => {
+const time = new Date(log.time).toLocaleTimeString('en-US');
+const finalPrev = log.final_prev_volume !== null ? log.final_prev_volume : '-';
+table += `<tr><td>${log.date}</td><td>${time}</td><td>${log.current_volume}</td><td>${log.canister_changed}</td><td>${finalPrev}</td><td>${log.volume_delta}</td></tr>`;
+});
+table += '</table>';
+
+const dailyTotals = {};
+logs.forEach(log => {
+if (!dailyTotals[log.date]) dailyTotals[log.date] = 0;
+dailyTotals[log.date] += log.volume_delta;
+});
+let totalsHtml = `<h3>${getText('dailyTotalsHeader')}</h3><table><tr>` + getText('dailyTableHeaders').map(h => `<th>${h}</th>`).join('') + '</tr>';
+for (const date in dailyTotals) {
+totalsHtml += `<tr><td>${date}</td><td>${dailyTotals[date]}</td></tr>`;
+}
+totalsHtml += '</table>';
+
+document.getElementById('chat').innerHTML = table + totalsHtml;
+}
+
+function viewAnalytics() {
+const analytics = JSON.parse(localStorage.getItem('analytics') || '[]');
+const logs = JSON.parse(localStorage.getItem('logs') || '[]');
+const engagement = logs.length;
+const noFlowCount = analytics.filter(a => a.event === 'no_flow').length;
+const helpCount = analytics.filter(a => a.event === 'help_requested').length;
+let summary = `<p>Engagement: ${engagement} checks</p><p>No Flow Instances: ${noFlowCount}</p><p>Help Requests: ${helpCount} (indicating confusion)</p>`;
+document.getElementById('chat').innerHTML = summary;
+}
+
+function generatePDF() {
+const { jsPDF } = window.jspdf;
+const doc = new jsPDF();
+doc.text(`Patient Report for ${user.firstName} ${user.lastName}`, 10, 10);
+doc.text(`Physician: ${user.physician} | State: ${user.state}`, 10, 20);
+doc.text('Fluid Volumes (mL):', 10, 30);
+const logs = JSON.parse(localStorage.getItem('logs') || '[]');
+let y = 40;
+logs.forEach(log => {
+const finalPrev = log.final_prev_volume !== null ? log.final_prev_volume : '-';
+doc.text(`${log.date} ${new Date(log.time).toLocaleTimeString('en-US')}: Current ${log.current_volume}, Changed: ${log.canister_changed}, Final Prev: ${finalPrev}, Delta: ${log.volume_delta}`, 10, y);
+y += 10;
+});
+if (logs.length > 0) {
+const avgDelta = logs.reduce((sum, l) => sum + l.volume_delta, 0) / logs.length;
+doc.text(`Average Delta (mL): ${avgDelta.toFixed(2)}`, 10, y);
+y += 10;
+const noFlow = logs.filter(l => l.volume_delta === 0).length;
+doc.text(`No Flow Instances: ${noFlow}`, 10, y);
+y += 10;
+}
+
+doc.text('Daily Fluid Volume Totals (mL):', 10, y);
+y += 10;
+const dailyTotals = {};
+logs.forEach(log => {
+if (!dailyTotals[log.date]) dailyTotals[log.date] = 0;
+dailyTotals[log.date] += log.volume_delta;
+});
+for (const date in dailyTotals) {
+doc.text(`${date}: ${dailyTotals[date]}`, 10, y);
+y += 10;
+}
+
+const analytics = JSON.parse(localStorage.getItem('analytics') || '[]');
+doc.text(`Analytics: Help Requests - ${analytics.filter(a => a.event === 'help_requested').length}`, 10, y);
+doc.save('interi_report.pdf');
+}
+
+// Service worker same as before
+if ('serviceWorker' in navigator) {
+navigator.serviceWorker.register(new URL('', import.meta.url), { scope: '/' })
+.then(() => console.log('Service Worker registered'))
+.catch(err => console.error('Service Worker error', err));
+}
+</script>
+</body>
+</html>
